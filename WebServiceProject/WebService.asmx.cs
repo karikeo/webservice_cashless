@@ -94,5 +94,25 @@ namespace WebServiceProject
             return ds;
 
         }
+
+        [WebMethod]
+        public DataSet GetVendicontMAC(string serie)
+        {
+            DataSet ds = new DataSet();
+            DBConn MyConnection = new DBConn();
+
+            MyConnection.Connection_ToDB();
+
+            SqlCommand comm = new SqlCommand();
+            comm.Connection = DBConn.conn;
+            comm.Parameters.Add("serie", SqlDbType.VarChar).Value = serie;
+            comm.CommandText = "SELECT vendicontMAC FROM Maquinas WHERE serie = (@serie)";
+
+            SqlDataAdapter adp = new SqlDataAdapter();
+            adp.SelectCommand = comm;
+            adp.Fill(ds);
+            return ds;
+
+        }
     }
 }
