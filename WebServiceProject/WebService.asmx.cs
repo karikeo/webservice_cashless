@@ -115,7 +115,7 @@ namespace WebServiceProject
         }
 
         [WebMethod]
-        public DataSet GetUserTransaction(int userid, int count)
+        public DataSet GetUserTransaction(string email, int count)
         {
 
             DataSet ds = new DataSet();
@@ -124,9 +124,9 @@ namespace WebServiceProject
             MyConnection.Connection_ToDB();
             SqlCommand comm = new SqlCommand();
             comm.Connection = DBConn.conn;
-            comm.Parameters.Add("userid", SqlDbType.Int).Value = userid;
+            comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
             comm.Parameters.Add("count", SqlDbType.Int).Value = count;
-            comm.CommandText = "SELECT TOP (@count) tipoTransaccion_id,montoTransaccion,FechaHora,SaldoDespuesTransaccion FROM Transaccion WHERE userid = (@userid);";
+            comm.CommandText = "SELECT TOP (@count) tipoTransaccion_id,montoTransaccion,FechaHora,SaldoDespuesTransaccion FROM Transaccion WHERE userid = (SELECT userid FROM Usuario WHERE email = (@email))";
             SqlDataAdapter adp = new SqlDataAdapter();
             adp.SelectCommand = comm;
             adp.Fill(ds);
