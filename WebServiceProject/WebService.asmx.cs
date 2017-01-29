@@ -21,7 +21,6 @@ namespace WebServiceProject
     // [System.Web.Script.Services.ScriptService]
     public class WebService : System.Web.Services.WebService
     {
-        public static int count = 0;
         class DBConn
         {
             public static SqlConnection conn = null;
@@ -108,6 +107,26 @@ namespace WebServiceProject
             comm.Parameters.Add("serie", SqlDbType.VarChar).Value = serie;
             comm.CommandText = "SELECT vendicontMAC FROM Maquinas WHERE serie = (@serie)";
 
+            SqlDataAdapter adp = new SqlDataAdapter();
+            adp.SelectCommand = comm;
+            adp.Fill(ds);
+            return ds;
+
+        }
+
+        [WebMethod]
+        public DataSet GetTransaction(int id, int count)
+        {
+
+            DataSet ds = new DataSet();
+            DBConn MyConnection = new DBConn();
+
+            MyConnection.Connection_ToDB();
+            SqlCommand comm = new SqlCommand();
+            comm.Connection = DBConn.conn;
+            comm.Parameters.Add("id", SqlDbType.Int).Value = id;
+            comm.Parameters.Add("count", SqlDbType.Int).Value = count;
+            comm.CommandText = "SELECT TOP (@count) tipoTransaccion_id,montoTransaccion,FechaHora,SaldoDespuesTransaccion FROM Transaccion WHERE userid = (@id);";
             SqlDataAdapter adp = new SqlDataAdapter();
             adp.SelectCommand = comm;
             adp.Fill(ds);
