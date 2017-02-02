@@ -126,7 +126,7 @@ namespace WebServiceProject
             comm.Connection = DBConn.conn;
             comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
             comm.Parameters.Add("count", SqlDbType.Int).Value = count;
-            comm.CommandText = "SELECT TOP (@count) tipoTransaccion_id,montoTransaccion,FechaHora,SaldoDespuesTransaccion FROM Transaccion WHERE userid = (SELECT userid FROM Usuario WHERE email = (@email))";
+            comm.CommandText = "SELECT TOP (@count) Transaccion.tipoTransaccion_id, Transaccion.montoTransaccion, Transaccion.FechaHora, Transaccion.SaldoDespuesTransaccion, Usuario.nombre FROM dbo.Transaccion, dbo.Usuario WHERE Transaccion.userid = (SELECT Usuario.userid FROM dbo.Usuario WHERE Usuario.email = (@email)) AND Usuario.email = (@email)";
             SqlDataAdapter adp = new SqlDataAdapter();
             adp.SelectCommand = comm;
             adp.Fill(ds);
