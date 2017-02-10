@@ -36,8 +36,6 @@
             <SortedDescendingHeaderStyle BackColor="#4870BE" />
         </asp:GridView>
         <asp:SqlDataSource ID="SqlDataSource1" runat="server" ConnectionString="<%$ ConnectionStrings:BDTRansactionConnectionString %>" SelectCommand="SELECT * FROM [Usuario]" ProviderName="System.Data.SqlClient"></asp:SqlDataSource>
-        <asp:Label ID="Label2" runat="server" Text="Count:" Font-Bold="True" Font-Size="Larger"></asp:Label>
-        <asp:Label ID="Label1" runat="server" Font-Bold="True" Font-Size="Larger"></asp:Label>
     </div>
     </form>
 </body>
