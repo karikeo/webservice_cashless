@@ -12,7 +12,7 @@ using System.Collections;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace SecureWebService
+namespace WebServiceProject
 {
     public class Token : SoapHeader
     {
@@ -24,6 +24,7 @@ namespace SecureWebService
             set { _token = value; }
         }
     }
+
     public class Authentication : SoapHeader
     {
         private string _email;
@@ -44,143 +45,24 @@ namespace SecureWebService
 
 
     }
+
+
+
+
     /// <summary>
-    /// Сводное описание для WebService
+    /// Summary description for WebService
     /// </summary>
     [WebService(Namespace = "http://www.vendomatica.cl/")]
     [WebServiceBinding(ConformsTo = WsiProfiles.BasicProfile1_1)]
     [System.ComponentModel.ToolboxItem(false)]
-    // Чтобы разрешить вызывать веб-службу из скрипта с помощью ASP.NET AJAX, раскомментируйте следующую строку. 
+    // To allow this Web Service to be called from script, using ASP.NET AJAX, uncomment the following line. 
     // [System.Web.Script.Services.ScriptService]
     public class WebService : System.Web.Services.WebService
     {
         public Authentication ServiceCredentials;
         public Token SecurityToken;
 
-        #region GenerateToken and GetHashedPassword
         private const string _alg = "HmacSHA256";
-        private const string _salt = "Ysj2hZAVx2kSut2VO92r"; //https://www.random.org/strings/
-        private const int _expirationMinutes = 5;
-
-        public static string GenerateToken(string email, string password)
-        {
-            DateTime currentDate = DateTime.UtcNow;
-            long ticks = currentDate.Ticks;
-
-            string hash = string.Join(":", new string[] { email, ticks.ToString() });
-            string hashLeft = "";
-            string hashRight = "";
-            using (HMAC hmac = HMACSHA256.Create(_alg))
-            {
-                hmac.Key = Encoding.UTF8.GetBytes(GetHashedPassword(password));
-                hmac.ComputeHash(Encoding.UTF8.GetBytes(hash));
-                hashLeft = Convert.ToBase64String(hmac.Hash);
-                hashRight = string.Join(":", new string[] { email, ticks.ToString() });
-            }
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join(":", hashLeft, hashRight)));
-        }
-
-        public static string GenerateToken(string email, string password, long ticks)
-        {
-            string hash = string.Join(":", new string[] { email, ticks.ToString() });
-            string hashLeft = "";
-            string hashRight = "";
-            using (HMAC hmac = HMACSHA256.Create(_alg))
-            {
-                hmac.Key = Encoding.UTF8.GetBytes(GetHashedPassword(password));
-                hmac.ComputeHash(Encoding.UTF8.GetBytes(hash));
-                hashLeft = Convert.ToBase64String(hmac.Hash);
-                hashRight = string.Join(":", new string[] { email, ticks.ToString() });
-            }
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join(":", hashLeft, hashRight)));
-        }
-
-
-
-
-        public static string GetHashedPassword(string password)
-        {
-            string key = string.Join(":", new string[] { password, _salt });
-            using (HMAC hmac = HMACSHA256.Create(_alg))
-            {
-                // Hash the key.
-                hmac.Key = Encoding.UTF8.GetBytes(_salt);
-                hmac.ComputeHash(Encoding.UTF8.GetBytes(key));
-                return Convert.ToBase64String(hmac.Hash);
-            }
-        }
-        #endregion
-
-
-        public static bool IsTokenValid(string token)
-        {
-            bool result = false;
-
-            try
-            {
-                // Base64 decode the string, obtaining the token:username:timeStamp.
-                string key = Encoding.UTF8.GetString(Convert.FromBase64String(token));
-                // Split the parts.
-                string[] parts = key.Split(new char[] { ':' });
-                if (parts.Length == 3)
-                {
-                    // Get the hash message, username, and timestamp.
-                    string hash = parts[0];
-                    string email = parts[1];
-                    long ticks = long.Parse(parts[2]);
-                    DateTime timeStamp = new DateTime(ticks);
-                    // Ensure the timestamp is valid.
-                    bool expired = Math.Abs((DateTime.UtcNow - timeStamp).TotalMinutes) > _expirationMinutes; // if token expired?
-                    if (!expired)
-                    {
-                        bool auth = false;
-
-                        DBConn MyConnection = new DBConn();
-                        MyConnection.Connection_ToDB();
-
-                        SqlCommand comm = new SqlCommand();
-                        comm.Connection = DBConn.conn;
-
-                        comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
-                        //comm.Parameters.Add("password", SqlDbType.VarChar).Value = password;
-
-                        comm.CommandText = "SELECT COUNT(*) FROM Usuario WHERE email = @email";
-
-                        auth = ((int)comm.ExecuteScalar()) > 0 ? true : false;
-                        comm.ExecuteNonQuery();
-
-                        if (auth)
-                        {
-                            SqlCommand comm2 = new SqlCommand();
-                            comm2.Connection = DBConn.conn;
-                            comm2.Parameters.Add("email", SqlDbType.VarChar).Value = email;
-                            comm2.CommandText = "SELECT password FROM Usuario WHERE email = @email";
-                            var pass = comm2.ExecuteScalar();
-                            MyConnection.SqlConnectionClose();
-
-                            string password = pass.ToString();
-                            // Hash the message with the key to generate a token.
-                            string computedToken = GenerateToken(email, password, ticks);
-                            // Compare the computed token with the one supplied and ensure they match.
-                            result = (token == computedToken);
-
-                            //add 3 minutes
-                            //string[] partTick = key.Split(new char[] { ':' });
-                            //long tick = long.Parse(parts[2]);
-                            //tick = TimeSpan.TicksPerMinute * 3;
-                            //token = GenerateToken(email,password,tick);
-
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            return result;
-        }
-
-
 
         #region Error messages
         const string ErrorMsg1 = "Wrong Service Credentials";
@@ -200,6 +82,166 @@ namespace SecureWebService
             return dsWrong;
         }
 
+        public bool CheckSecurityHeader(Token securityToken)
+        {
+            if ((SecurityToken == null) || (string.IsNullOrEmpty(SecurityToken.SecurityToken)))
+            {
+                return false;
+            }
+            if (IsTokenValid(SecurityToken.SecurityToken))
+            {
+                return true;
+            }
+            else return false;
+        }
+
+        public string GetEmailFromToken(string token)
+        {
+            string key = Encoding.UTF8.GetString(Convert.FromBase64String(token));
+            string[] parts = key.Split(new char[] { ':' });
+            string email = parts[1];
+            return email;
+        }
+
+
+        public static string GenerateToken(string email)
+        {
+            DB SQLConnection = new DB();
+            SQLConnection.ConnectionOpen();
+
+
+            SqlCommand comm = new SqlCommand();
+            comm.Connection = DB.connection;
+            comm.CommandText = "GetPassAndSalt";
+            comm.CommandType = CommandType.StoredProcedure;
+            comm.Parameters.Add("@pEmail", SqlDbType.VarChar).Value = email;
+            /*
+            SqlParameter output = new SqlParameter("@pSalt", SqlDbType.UniqueIdentifier);
+            output.Direction = ParameterDirection.Output;
+            comm.Parameters.Add(output);
+            */
+            SqlDataReader reader;
+            reader = comm.ExecuteReader();
+
+            string password = "";
+            string salt = "";
+
+            while (reader.Read())
+            {
+                salt = reader.GetValue(0).ToString();
+                password = reader.GetValue(1).ToString();
+
+            }
+            reader.Close();
+
+            SQLConnection.ConnectionClose();
+
+            //  string salt = output.Value.ToString();
+
+            DateTime currentDate = DateTime.UtcNow;
+            long ticks = currentDate.Ticks;
+
+            string hash = string.Join(":", new string[] { email, ticks.ToString() });
+            string hashLeft = "";
+            string hashRight = "";
+            using (HMAC hmac = HMACSHA256.Create(_alg))
+            {
+                hmac.Key = Encoding.UTF8.GetBytes(GetHashedPassword(password, salt));
+                hmac.ComputeHash(Encoding.UTF8.GetBytes(hash));
+                hashLeft = Convert.ToBase64String(hmac.Hash);
+                hashRight = string.Join(":", new string[] { email, ticks.ToString() });
+            }
+
+            string token = Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join(":", hashLeft, hashRight)));
+
+            SQLConnection.ConnectionOpen();
+
+            SqlCommand comm2 = new SqlCommand();
+            comm2.Connection = DB.connection;
+            comm2.CommandText = "AddToken";
+            comm2.CommandType = CommandType.StoredProcedure;
+            comm2.Parameters.Add("@pToken", SqlDbType.NVarChar, 200).Value = token;
+
+            comm2.ExecuteNonQuery();
+            SQLConnection.ConnectionClose();
+
+            return token;
+        }
+
+        public static string GetHashedPassword(string password, string salt)
+        {
+            string key = string.Join(":", new string[] { password, salt });
+            using (HMAC hmac = HMACSHA256.Create(_alg))
+            {
+                // Hash the key.
+                hmac.Key = Encoding.UTF8.GetBytes(salt);
+                hmac.ComputeHash(Encoding.UTF8.GetBytes(key));
+                return Convert.ToBase64String(hmac.Hash);
+            }
+        }
+
+        private bool IsUserValid(string email, string password)
+        {
+
+            DB SQLConnection = new DB();
+            SQLConnection.ConnectionOpen();
+
+            SqlCommand comm = new SqlCommand();
+            comm.Connection = DB.connection;
+            comm.CommandText = "AuthenticateUser";
+            comm.CommandType = CommandType.StoredProcedure;
+
+            comm.Parameters.Add("@pEmail", SqlDbType.VarChar).Value = email;
+            comm.Parameters.Add("@pPassword", SqlDbType.VarChar).Value = password;
+
+
+            SqlParameter output = new SqlParameter("@responseMessage", SqlDbType.Int);
+            output.Direction = ParameterDirection.Output;
+            comm.Parameters.Add(output);
+
+            comm.ExecuteNonQuery();
+            SQLConnection.ConnectionClose();
+            int res = int.Parse(output.Value.ToString());
+            if (res == 1)
+            {
+
+                return true;
+            }
+            else { return false; }
+
+
+        }
+
+        public static bool IsTokenValid(string token)
+        {
+            bool result = false;
+
+            DB SQLConnection = new DB();
+            SQLConnection.ConnectionOpen();
+            SqlCommand comm = new SqlCommand();
+            comm.Connection = DB.connection;
+
+            comm.Parameters.Add("token", SqlDbType.VarChar).Value = token;
+            comm.CommandText = "SELECT COUNT(*) FROM Sessions WHERE token = @token";
+
+            result = ((int)comm.ExecuteScalar()) > 0 ? true : false;
+
+            if (result == true)
+                UpdateTokenTime(token);
+
+            SQLConnection.ConnectionClose();
+            return result;
+        }
+
+        public static void UpdateTokenTime(string token)
+        {
+            SqlCommand comm2 = new SqlCommand();
+            comm2.Connection = DB.connection;
+            comm2.CommandType = CommandType.StoredProcedure;
+            comm2.Parameters.Add("@pToken", SqlDbType.NVarChar, 200).Value = token;
+            comm2.CommandText = "UpdateTokenTime";
+            comm2.ExecuteNonQuery();
+        }
 
         [WebMethod]
         [SoapHeader("ServiceCredentials")]
@@ -212,199 +254,191 @@ namespace SecureWebService
             // Are the credentials valid?
             if (!IsUserValid(ServiceCredentials.Email, ServiceCredentials.Password))
                 return ErrorMsg4;
+
             string token = null;
-            token = GenerateToken(ServiceCredentials.Email, ServiceCredentials.Password);
+
+            token = GenerateToken(ServiceCredentials.Email);
             return token;
-
-            /*
-			// Create and store the AuthenticatedToken before returning it
-			string token = Guid.NewGuid().ToString();
-
-			HttpRuntime.Cache.Add(
-				token,
-				ServiceCredentials.Email,
-				null,
-				System.Web.Caching.Cache.NoAbsoluteExpiration,
-				TimeSpan.FromMinutes(5),
-				System.Web.Caching.CacheItemPriority.NotRemovable,
-				null);
-			
-			return token;
-			*/
-
         }
 
-        private bool IsUserValid(string email, string password)
+        [WebMethod]
+        public string NewUser(string iNombre, string iRut, string iPassword, string iMontoasignado, int iCodcliente, int iCodinterno, int iNroTarjeta, int iEstado, string iEmail)
         {
-            bool authenticated = false;
 
-            DBConn MyConnection = new DBConn();
-            MyConnection.Connection_ToDB();
+            //Сделать проверки (email и т.д., кол-во символов, фильтрацию входящих данных)
+            if (String.IsNullOrEmpty(iNombre) || (String.IsNullOrEmpty(iPassword)) || (String.IsNullOrEmpty(iEmail)))
+            { return "Wrong Input Data!"; }
+            DB SQLConnection = new DB();
+            SQLConnection.ConnectionOpen();
 
             SqlCommand comm = new SqlCommand();
-            comm.Connection = DBConn.conn;
+            comm.Connection = DB.connection;
+            comm.CommandText = "AddUser";
+            comm.CommandType = CommandType.StoredProcedure;
 
-            comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
-            comm.Parameters.Add("password", SqlDbType.VarChar).Value = password;
-
-            comm.CommandText = "SELECT COUNT(*) FROM Usuario WHERE email = @email AND password = @password";
-
-            authenticated = ((int)comm.ExecuteScalar()) > 0 ? true : false;
-            comm.ExecuteNonQuery();
-
-            MyConnection.SqlConnectionClose();
-
-            return authenticated;
-
-            /*
-			SqlDataAdapter adp = new SqlDataAdapter();
-			adp.SelectCommand = comm;
-
-			DataSet ds = new DataSet();
-			adp.Fill(ds);
-			MyConnection.SqlConnectionClose();
-
-			int count = ds.Tables[0].Rows.Count;
-			//If count is equal to 1 - OK
-			if (count == 1)
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-			*/
-
-            // Ask the SQL Memebership to verify the credentials for us
-            //   return System.Web.Security.Membership.ValidateUser(Username, Password);
-            //if (ServiceCredentials.Email == "anton" && ServiceCredentials.Password == "world")
-            //	return true;
-
-            //return false;
-        }
-
-        /*
-		private bool IsUserValid(Authentication ServiceCredentials)
-		{
-			if (ServiceCredentials == null)
-				return false;
-
-			// Does the token exists in our Cache?
-			if (!string.IsNullOrEmpty(ServiceCredentials.Token))
-				return (HttpRuntime.Cache[ServiceCredentials.Token] != null);
-
-			return false;
-		}
-		
-			 
-		*/
-
-        [WebMethod]
-        [System.Web.Services.Protocols.SoapHeader("SecurityToken")]
-        public string HelloWorld()
-        {
-            if (SecurityToken == null)
-                return ErrorMsg3;
-            if (string.IsNullOrEmpty(SecurityToken.SecurityToken))
-                return ErrorMsg1;
-            // Are the credentials valid?
-            if (IsTokenValid(SecurityToken.SecurityToken))
-            {
-                return "Hello i'm here!";
-            }
+            comm.Parameters.Add("pNombre", SqlDbType.NVarChar).Value = iNombre;
+            if (String.IsNullOrEmpty(iRut))
+            { comm.Parameters.Add("pRut", SqlDbType.VarChar).Value = 0; }
             else
-            {
-                return "Please call AuthenitcateUser() first.";
-            }
-        }
+            { comm.Parameters.Add("pRut", SqlDbType.VarChar).Value = iRut; }
+            comm.Parameters.Add("pPassword", SqlDbType.VarChar).Value = iPassword;
+            if (String.IsNullOrEmpty(iRut))
+            { comm.Parameters.Add("pMontoasignado", SqlDbType.Money).Value = 0; }
+            else
+            { comm.Parameters.Add("pMontoasignado", SqlDbType.Money).Value = Convert.ToDecimal(iMontoasignado); }
+            comm.Parameters.Add("pCodcliente", SqlDbType.Int).Value = iCodcliente;
+            comm.Parameters.Add("pCodinterno", SqlDbType.Int).Value = iCodinterno;
+            comm.Parameters.Add("pNroTarjeta", SqlDbType.Int).Value = iNroTarjeta;
+            comm.Parameters.Add("pEstado", SqlDbType.Int).Value = iEstado;
+            comm.Parameters.Add("pEmail", SqlDbType.VarChar).Value = iEmail;
 
+            SqlParameter output = new SqlParameter("@responseMessage", SqlDbType.VarChar, 5000);
+            output.Direction = ParameterDirection.Output;
+            comm.Parameters.Add(output);
 
-        //[WebMethod]
-        //[SoapHeader("ServiceCredentials")]
-        //public string Test()
-        //{
-        //	if (ServiceCredentials == null)
-        //	{
-        //		return ErrorMsg3;
-        //	}
-        //	if (string.IsNullOrEmpty(ServiceCredentials.Token))
-        //	{
-        //		return ErrorMsg2;
-        //	}
-        //	try
-        //	{
-        //		if (!HttpRuntime.Cache[ServiceCredentials.Token.ToString()].Equals(ServiceCredentials.Token.ToString()))
-        //		{
-        //			return string.Format("Hello from Test(). The GUID is {0}", ServiceCredentials.Token);
-        //		}
-        //		return "Error authentication";
-        //	}
-        //	catch{
-        //		new SoapException("Fault occurred", SoapException.ClientFaultCode);
-        //		return "Wrong authentication";
-        //		}
-        //	finally { }
-        //	}
+            comm.ExecuteNonQuery();
+            SQLConnection.ConnectionClose();
+            return output.Value.ToString();
 
-        [WebMethod]
-        [SoapHeader("SecurityToken")]
-        public DataSet GetSaldoActualizado()
-        {
-            if (SecurityToken == null)
-            {
-                return showError(ErrorMsg3);
-            }
-            if (string.IsNullOrEmpty(SecurityToken.SecurityToken))
-            {
-                return showError(ErrorMsg1);
-            }
-            if (IsTokenValid(SecurityToken.SecurityToken))
-            {
-                string token = SecurityToken.SecurityToken;
-                // Base64 decode the string, obtaining the token:username:timeStamp.
-                string key = Encoding.UTF8.GetString(Convert.FromBase64String(token));
-                // Split the parts.
-                string[] parts = key.Split(new char[] { ':' });
-                string email = parts[1];
-
-                DBConn MyConnection = new DBConn();
-                MyConnection.Connection_ToDB();
-                SqlCommand comm2 = new SqlCommand();
-                comm2.Connection = DBConn.conn;
-                comm2.Parameters.Add("email", SqlDbType.VarChar).Value = email;
-                comm2.CommandText = "SELECT password FROM Usuario WHERE email = @email";
-                var pass = comm2.ExecuteScalar();
-                string password = pass.ToString();
-
-
-                try
-                {
-                    DataSet ds = new DataSet();
-                    SqlCommand comm = new SqlCommand();
-                    comm.Connection = DBConn.conn;
-                    comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
-                    comm.Parameters.Add("password", SqlDbType.VarChar).Value = password;
-                    comm.CommandText = "SELECT Transaccion_ultimo.saldo_actualizado,Usuario.nombre FROM dbo.Transaccion_ultimo, dbo.Usuario WHERE Transaccion_ultimo.userid = (SELECT Usuario.userid FROM dbo.Usuario WHERE Usuario.email = (@email) AND Usuario.password = (@password)) AND Usuario.email = (@email)";
-                    SqlDataAdapter adp = new SqlDataAdapter();
-                    adp.SelectCommand = comm;
-                    adp.Fill(ds);
-                    return ds;
-                }
-                catch
-                {
-                    new SoapException("Fault occurred", SoapException.ClientFaultCode);
-                    return showError(ErrorMsg1);
-                }
-                finally { }
-            }
-            else { return showError(ErrorMsg2); }
         }
 
         [WebMethod]
         public bool TestIsValidToken(string token)
         {
             return IsTokenValid(token);
+        }
+
+        [WebMethod]
+        [System.Web.Services.Protocols.SoapHeader("SecurityToken")]
+        public DataSet GetSaldoActualizado()
+        {
+
+            if (CheckSecurityHeader(SecurityToken) == true)
+            {
+                string token = SecurityToken.SecurityToken;
+                string email = GetEmailFromToken(token);
+
+                DataSet ds = new DataSet();
+                DB SQLConnection = new DB();
+
+                SQLConnection.ConnectionOpen();
+                SqlCommand comm = new SqlCommand();
+                comm.Connection = DB.connection;
+                comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
+                comm.CommandText = "SELECT saldo_actualizado FROM Transaccion_ultimo WHERE userid = (SELECT userid FROM Usuario WHERE email = (@email))";
+                SqlDataAdapter adp = new SqlDataAdapter();
+                adp.SelectCommand = comm;
+                adp.Fill(ds);
+                SQLConnection.ConnectionClose();
+                return ds;
+            }
+            else
+            {
+                return showError(ErrorMsg2);
+            }
+        }
+
+        [WebMethod]
+        [System.Web.Services.Protocols.SoapHeader("SecurityToken")]
+        public DataSet NewTransaction(int tipoTransaccion, string montoTransaccion)
+        {
+            if (CheckSecurityHeader(SecurityToken) == true)
+            {
+                string token = SecurityToken.SecurityToken;
+                string email = GetEmailFromToken(token);
+
+                int numRows = 0;
+
+                DataTable table = new DataTable();
+
+                decimal mTransaccion = 0;
+                mTransaccion = System.Convert.ToDecimal(montoTransaccion);
+
+                DB SQLConnection = new DB();
+                SQLConnection.ConnectionOpen();
+
+                SqlCommand comm = new SqlCommand();
+                comm.Connection = DB.connection;
+                comm.CommandText = "SP_Inserta_Transaccion";
+                comm.CommandType = CommandType.StoredProcedure;
+
+                comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
+                comm.Parameters.Add("tipoTransaccion", SqlDbType.Int).Value = tipoTransaccion;
+                comm.Parameters.Add("montoTransaccion", SqlDbType.Money).Value = mTransaccion;
+
+
+                numRows = comm.ExecuteNonQuery();
+                table.TableName = "Table";
+                table.Columns.Add("Rows", typeof(int));
+                table.Rows.Add(numRows);
+                DataSet ds = new DataSet();
+                ds.Tables.Add(table);
+                SQLConnection.ConnectionClose();
+                return ds;
+            }
+            else
+            {
+                return showError(ErrorMsg2);
+            }
+        }
+
+        [WebMethod]
+        [System.Web.Services.Protocols.SoapHeader("SecurityToken")]
+        public DataSet GetVendicontMAC(string serie)
+        {
+            if (CheckSecurityHeader(SecurityToken) == true)
+            {
+
+                DataSet ds = new DataSet();
+                DB SQLConnection = new DB();
+
+                SQLConnection.ConnectionOpen();
+
+                SqlCommand comm = new SqlCommand();
+                comm.Connection = DB.connection;
+                comm.Parameters.Add("serie", SqlDbType.VarChar).Value = serie;
+                comm.CommandText = "SELECT vendicontMAC FROM Maquinas WHERE serie = (@serie)";
+
+                SqlDataAdapter adp = new SqlDataAdapter();
+                adp.SelectCommand = comm;
+                adp.Fill(ds);
+                SQLConnection.ConnectionClose();
+                return ds;
+            }
+            else
+            {
+                return showError(ErrorMsg2);
+            }
+        }
+
+        [WebMethod]
+        [System.Web.Services.Protocols.SoapHeader("SecurityToken")]
+        public DataSet GetUserTransaction(int count)
+        {
+            if (CheckSecurityHeader(SecurityToken) == true)
+            {
+                string token = SecurityToken.SecurityToken;
+                string email = GetEmailFromToken(token);
+
+                DataSet ds = new DataSet();
+                DB SQLConnection = new DB();
+
+                SQLConnection.ConnectionOpen();
+                SqlCommand comm = new SqlCommand();
+                comm.Connection = DB.connection;
+                comm.Parameters.Add("email", SqlDbType.VarChar).Value = email;
+                comm.Parameters.Add("count", SqlDbType.Int).Value = count;
+                comm.CommandText = "SELECT TOP (@count) Transaccion.tipoTransaccion_id, Transaccion.montoTransaccion, Transaccion.FechaHora, Transaccion.SaldoDespuesTransaccion, Usuario.nombre FROM dbo.Transaccion, dbo.Usuario WHERE Transaccion.userid = (SELECT Usuario.userid FROM dbo.Usuario WHERE Usuario.email = (@email)) AND Usuario.email = (@email)";
+                SqlDataAdapter adp = new SqlDataAdapter();
+                adp.SelectCommand = comm;
+                adp.Fill(ds);
+                SQLConnection.ConnectionClose();
+                return ds;
+            }
+            else
+            {
+                return showError(ErrorMsg2);
+            }
         }
     }
 }

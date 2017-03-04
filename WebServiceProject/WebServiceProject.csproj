@@ -116,7 +116,7 @@
     <Content Include="webservice.aspx" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DBConn.cs" />
+    <Compile Include="DB.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="WebService.asmx.cs">
       <DependentUpon>WebService.asmx</DependentUpon>
